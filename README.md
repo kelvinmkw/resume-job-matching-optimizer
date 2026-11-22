@@ -83,7 +83,6 @@ The implementation is modular by responsibility. See [docs/PROJECT_PROPOSAL.md](
 - Dataset: [rahulrajpu676/job-resume-matching](https://huggingface.co/datasets/rahulrajpu676/job-resume-matching)
 - Lavi, D. et al. (2021). [conSultantBERT](https://doi.org/10.48550/arxiv.2109.06501)
 - Reference implementation and course draft: [rufinachw/COMP7607-NLP-Resume-Optimizer](https://github.com/rufinachw/COMP7607-NLP-Resume-Optimizer)
-- Frontend inspiration: [ivan00105/Agentic-System-for-Investment-Research](https://github.com/ivan00105/Agentic-System-for-Investment-Research)
 
 ## License and data notice
 
