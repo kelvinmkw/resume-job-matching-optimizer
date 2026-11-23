@@ -1,0 +1,5 @@
+# Keep data/model outputs and PII-like candidate membership manifests local.
+outputs/
+*.csv
+*.jsonl
+*.diff

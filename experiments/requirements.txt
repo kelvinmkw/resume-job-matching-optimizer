@@ -1,0 +1,5 @@
+# Pinned semantic encoder dependencies for the grouped reproduction.
+numpy>=1.26,<3
+scikit-learn>=1.4,<2
+sentence-transformers>=3,<6
+torch>=2.2,<3
