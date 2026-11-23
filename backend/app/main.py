@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.schemas import AnalyzeRequest, AnalyzeResponse, RankRequest, RewriteRequest, RewriteResponse
-from app.services.skills import find_skills, jaccard
+from app.services.skills import find_skills
 from app.services.matcher import get_matcher
 from app.services.dataset import load_jobs, DatasetUnavailable
 from app.services.rewriter import rewrite_resume
@@ -28,19 +28,22 @@ def rank(request: RankRequest):
         jobs = load_jobs()
     except DatasetUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
-    matcher = get_matcher()
-    rows = []
+    texts = [f"{row.title}\n{row.text}" for row in jobs.itertuples(index=False)]
     resume_skills = find_skills(request.resume_text)
-    for row in jobs.to_dict("records"):
-        text = f"{row['title']}\n{row['text']}"
-        job_skills = find_skills(text, [s.strip() for s in str(row['skills']).split(",") if s.strip()])
-        score = matcher.score(request.resume_text, text, resume_skills, job_skills)
-        key = {"B0": "b0_tfidf", "B1": "b1_semantic", "B2": "b2_semantic_skill"}[request.model]
-        value = score[key]
-        if value is None: value = score["b0_tfidf"]
-        rows.append({"job_id": str(row["job_id"]), "title": str(row["title"]), "score": value, "not_evidenced_skills": sorted(job_skills - resume_skills)})
-    rows.sort(key=lambda x: x["score"], reverse=True)
-    return {"model": request.model, "results": rows[:request.limit], "caveat": "Similarity ranking over loaded jobs only; not a hiring recommendation."}
+    skill_sets = [find_skills(text, row.skills) for text, row in zip(texts, jobs.itertuples(index=False))]
+    scores = get_matcher().score_many(request.resume_text, texts, resume_skills, skill_sets)
+    score_key = {"B0": "b0_tfidf", "B1": "b1_semantic", "B2": "b2_semantic_skill"}[request.model]
+    selected = scores[score_key]
+    if selected is None:
+        raise HTTPException(status_code=503, detail="Sentence-BERT is not enabled; B1 ranking requires MATCHER_USE_SENTENCE_TRANSFORMERS=true and the optional dependency.")
+    if not isinstance(selected, list):
+        selected = [selected]
+    ranked = []
+    for index, row in enumerate(jobs.itertuples(index=False)):
+        ranked.append({"job_id": str(row.job_id), "title": str(row.title), "score": float(selected[index]),
+                       "not_evidenced_skills": sorted(skill_sets[index] - resume_skills)})
+    ranked.sort(key=lambda item: item["score"], reverse=True)
+    return {"model": request.model, "results": ranked[:request.limit], "caveat": "Similarity ranking over loaded jobs only; not a hiring recommendation."}
 
 @app.post("/api/rewrite", response_model=RewriteResponse)
 async def rewrite(request: RewriteRequest):
