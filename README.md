@@ -1,89 +1,98 @@
 # Resume–Job Matching & Optimizer
 
-An explainable NLP project for comparing a resume with a job description, highlighting evidenced and not-yet-evidenced skills, ranking recorded candidate–job pairs, and optionally generating a fact-constrained rewrite for human review.
+An explainable NLP project for comparing a resume with a job description, highlighting detected evidence and textual skill gaps, ranking recorded candidate–job pairs, and optionally generating a fact-constrained rewrite for human review.
 
-> **Important:** This is an educational decision-support prototype, not an ATS, hiring recommendation, or guarantee of interview outcomes. A missing keyword means only that the skill was not found in the supplied text; it does not mean the candidate lacks the ability. Never submit generated changes without reviewing them.
-
-## Project goals
-
-- Compare lexical TF–IDF (B0), semantic Sentence-BERT (B1), and semantic plus explicit skill overlap (B2).
-- Diagnose matching dimensions and skill gaps transparently.
-- Support dataset-wide ranking using the provided compatibility score only as a proxy relevance label.
-- Offer optional Ollama rewriting with explicit no-invention constraints and human factuality review.
-- Make assumptions, limitations, and evaluation methodology reproducible.
+> **Important:** This is an educational prototype, not an ATS, hiring recommendation, or guarantee of interview outcomes. A missing keyword means only that the skill was not found in the supplied text; it does not mean the candidate lacks the ability. Review every generated change.
 
 ## Repository map
 
 ```text
-backend/                 FastAPI API and matching/diagnosis/rewrite services
-frontend/                Next.js interface (resume + job analysis and ranking)
-data/                    Place reformatted cv.csv, job.csv, matches.csv here
-scripts/                 Dataset preparation and evaluation entry points
-docs/                    Detailed proposal, methodology, data guide, API notes
-notebooks/               Space for exploratory analysis and course experiments
-tests/                   Backend unit tests
+backend/       FastAPI API and matching/diagnosis/rewrite services, with backend tests
+frontend/      Next.js web application
+ data/         Put local cv.csv, job.csv, matches.csv here (not committed)
+scripts/       Dataset ranking evaluation script and usage guide
+docs/          Project proposal, methodology, data guide, API notes
+notebooks/     Dataset exploration notebook and notebook dependencies
 ```
 
 ## Quick start
 
-### Backend
+Prerequisites: Python 3.10+ and Node.js 18+. Start the API and frontend in two terminals from the repository root.
+
+### Terminal 1 — backend
 
 ```bash
 cd backend
 python -m venv .venv
-# Windows: .venv\\Scripts\\activate
+# macOS/Linux:
 source .venv/bin/activate
+# Windows PowerShell instead:
+# .venv\\Scripts\\Activate.ps1
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-API docs: <http://localhost:8000/docs>. By default, the API uses a lightweight TF–IDF backend. Install the optional semantic dependencies and set `MATCHER_USE_SENTENCE_TRANSFORMERS=true` to enable Sentence-BERT; the model is downloaded on first use.
+Leave the API running. Open <http://localhost:8000/docs> for interactive API documentation.
 
-### Frontend
+### Terminal 2 — frontend
 
 ```bash
 cd frontend
 npm install
+# Optional: copy .env.example to .env.local; default API URL is http://localhost:8000
 npm run dev
 ```
 
-Open <http://localhost:3000>. Set `NEXT_PUBLIC_API_URL=http://localhost:8000` if using a non-default API URL.
+Leave the frontend running and open <http://localhost:3000>. Paste resume and job-description text for single-pair analysis. This basic workflow does not require the dataset, Sentence-BERT, or Ollama.
 
-### Dataset
+### Dataset-wide evaluation (optional)
 
-Put the reference dataset's reformatted CSV files at `data/cv.csv`, `data/job.csv`, and `data/matches.csv`. See [docs/DATA.md](docs/DATA.md). The app works for a single resume/job pair without those files. Do not commit private or identifiable resume data.
+Download data as described in [`data/README.md`](data/README.md). With Python dependencies installed, run from the repository root:
 
-### Optional local LLM rewriting
+```bash
+python scripts/evaluate_ranking.py --cv data/cv.csv --jobs data/job.csv --matches data/matches.csv --output reports/ranking_metrics.csv
+```
 
-Install Ollama separately, pull an instruction model (for example `ollama pull llama3`), then set `OLLAMA_ENABLED=true` and `OLLAMA_MODEL=llama3`. Without Ollama, the rewrite endpoint returns an explicit unavailable status; it does not fabricate a rewrite. A model's compliance is not proof of factual accuracy.
+For the exploratory notebook, install its dependencies and launch Jupyter from the repository root:
+
+```bash
+pip install -r backend/requirements.txt
+pip install -r notebooks/requirements.txt
+jupyter lab
+```
+
+Then open `notebooks/01_dataset_exploration.ipynb`. Dataset files must be present for data cells.
+
+### Optional features
+
+- **Sentence-BERT:** install `sentence-transformers`, set `MATCHER_USE_SENTENCE_TRANSFORMERS=true` and `SENTENCE_TRANSFORMER_MODEL` in the backend environment. The model downloads on first use. Check `/health` and `b1_semantic`; an unavailable embedding is not a semantic score.
+- **Local rewrite:** install Ollama separately, pull an instruction model (for example `ollama pull llama3`), and configure `OLLAMA_ENABLED=true` and `OLLAMA_MODEL=llama3`. Review generated text for unsupported claims.
 
 ## Main endpoints
 
 - `GET /health` — service status.
-- `POST /api/analyze` — B0/B1/B2 scores, skill evidence and gap diagnosis.
-- `POST /api/rank` — rank dataset jobs for a resume (requires CSV data).
-- `POST /api/rewrite` — optional constrained rewrite proposal, requires Ollama.
+- `POST /api/analyze` — B0/B1/B2 similarity signals and skill evidence.
+- `POST /api/rank` — rank loaded jobs for a resume (requires `data/job.csv`).
+- `POST /api/rewrite` — optional constrained rewrite proposal (requires Ollama).
 
-See [docs/API.md](docs/API.md) for request examples.
+See [docs/API.md](docs/API.md), [docs/PROJECT_PROPOSAL.md](docs/PROJECT_PROPOSAL.md), and [docs/METHODOLOGY.md](docs/METHODOLOGY.md).
 
-## Evaluation overview
+## Evaluation interpretation
 
-For dataset-wide experiments, treat the dataset's compatibility score as a proxy relevance signal, not a human hiring judgment. Evaluate NDCG@5 and NDCG@10 over recorded candidate–job pairs and split by candidate ID when tuning weights or comparing configurations. Unrecorded pairs are not negative examples. Do not use precomputed component subscores as model inputs. Report ranking results only for the fixed, clearly stated job pool. Rewriting score changes are not evidence of improved hiring outcomes.
+The dataset compatibility score is a proxy relevance label, not a human hiring judgment. Evaluate NDCG@5/@10 on recorded candidate–job pairs; use candidate-grouped validation/test splits when tuning. Unrecorded pairs are unknown, not negatives. Dataset component subscores are not model inputs. Metrics indicate agreement with the proxy labels on the stated pool, not hiring performance.
 
-## Development and tests
+## Tests
 
 ```bash
-cd backend && pytest
+cd backend
+pytest
 ```
-
-The implementation is modular by responsibility. See [docs/PROJECT_PROPOSAL.md](docs/PROJECT_PROPOSAL.md) for the detailed project design and [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for evaluation decisions.
 
 ## References
 
 - Dataset: [rahulrajpu676/job-resume-matching](https://huggingface.co/datasets/rahulrajpu676/job-resume-matching)
 - Lavi, D. et al. (2021). [conSultantBERT](https://doi.org/10.48550/arxiv.2109.06501)
-- Reference implementation and course draft: [rufinachw/COMP7607-NLP-Resume-Optimizer](https://github.com/rufinachw/COMP7607-NLP-Resume-Optimizer)
+- Reference implementation: [rufinachw/COMP7607-NLP-Resume-Optimizer](https://github.com/rufinachw/COMP7607-NLP-Resume-Optimizer)
+- Frontend inspiration: [ivan00105/Agentic-System-for-Investment-Research](https://github.com/ivan00105/Agentic-System-for-Investment-Research)
 
-## License and data notice
-
-No third-party dataset or pretrained model weights are bundled. Follow the dataset and model licenses and cite them in coursework. Add a suitable project license after confirming group requirements.
+No dataset or pretrained model weights are bundled. Follow current data/model terms and cite sources. Add a project license after confirming group requirements.
